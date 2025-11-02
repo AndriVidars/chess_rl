@@ -11,7 +11,7 @@ class Board:
         self.init_board()
 
     def init_board(self):
-        for player in self.players:
+        for player in [self.player_white, self.player_black]:
             for piece in player.pieces:
                 self.board[piece.position[0]][piece.position[1]] = piece
     
@@ -19,6 +19,13 @@ class Board:
         return {piece: self.get_valid_moves(piece) for piece in player.pieces}
     
     def act(self, player: Player, piece: Piece, move: tuple[int, int]):
+        if piece not in player.pieces:
+            raise ValueError(f"Piece {piece.type} at {piece.position} not found in player {player.name}'s pieces")
+        
+        piece_moves = self.get_valid_moves(piece)
+        if move not in piece_moves:
+            raise ValueError(f"Invalid move for piece {piece.type} at {piece.position}: {move}")
+        
         opp_player = self.player_black if player == self.player_white else self.player_white
         self.board[piece.position[0]][piece.position[1]] = None
         
@@ -196,5 +203,32 @@ class Board:
         opp_king_pos = next(piece.position for piece in opp_player.pieces if piece.type == PieceType.KING)
         return any(opp_king_pos in self.get_valid_actions(player).values())
     
+    def is_checkmate(self, player: Player):
+        opp_player = self.player_black if player == self.player_white else self.player_white
+        opp_player_moves = self.get_valid_actions(opp_player)
+        for piece, move in opp_player_moves.items():
+            board_copy = deepcopy(self)
+            board_copy.act(opp_player, piece, move)
+            if not board_copy.is_check(player):
+                return False
+        return True
 
-
+    @staticmethod
+    def square_str_to_pos(square_str):
+        letters = 'ABCDEFGH'
+        col = letters.index(square_str[0])
+        row = int(square_str[1]) - 1
+        return col, row
+    
+    def print_board(self):
+        print(f"\n  {'-'*55}")
+        for i in range(7, -1, -1):
+            for j in range(8):
+                piece = self.board[j][i]
+                if piece:
+                    print(f"{f'{i + 1} ' if j == 0 else ''}|{piece.color.name[0]}-{piece.type.name[:2]}|", end=" ")
+                else:
+                    print(f"{f'{i + 1} ' if j == 0 else ''}| .. |", end=" ")
+            print(f"\n  {'-'*55}")
+        
+        print(f"    {'      '.join(list('ABCDEFGH'))}")
