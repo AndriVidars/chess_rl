@@ -6,6 +6,8 @@ class Player:
         self.name = name
         self.color = color
         self.pieces = set[Piece]()
+        self.pieces_eliminated = set[Piece]()
+        self.init_pieces()
     
     def init_pieces(self):
         if self.color == Color.WHITE:
@@ -34,3 +36,6 @@ class Player:
                 Piece(PieceType.KNIGHT, self.color, (6, 7)),
                 Piece(PieceType.ROOK, self.color, (7, 7))
             }
+    
+    def __eq__(self, other: 'Player'):
+        return self.color == other.color

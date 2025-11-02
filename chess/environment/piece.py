@@ -15,3 +15,15 @@ class Piece:
         self.color = color
         self.position = position
     
+    
+    def __repr__(self):
+        return f"{self.color.name} {self.type.name} at {self.position}"
+    
+    def __eq__(self, other: 'Piece'):
+        return self.type == other.type and self.color == other.color and self.position == other.position
+    
+    def __hash__(self):
+        return hash((self.type, self.color, self.position))
+    
+    def __str__(self):
+        return f"{self.color.name} {self.type.name} at {self.position}"
