@@ -3,12 +3,15 @@ from chess.environment.player import Player
 from chess.environment.color import Color
 from copy import deepcopy
 
+from chess.environment.utils import square_pos_to_str
+
 class Board:
-    def __init__(self, player_white: Player, player_black: Player):
+    def __init__(self, player_white: Player, player_black: Player, main_board=True):
         self.board = [[None for _ in range(8)] for _ in range(8)]
         self.player_white = player_white
         self.player_black = player_black
         self.init_board()
+        self.main_board = main_board
 
     def init_board(self):
         for player in [self.player_white, self.player_black]:
@@ -28,6 +31,15 @@ class Board:
         if not self.get_valid_actions(opp_player):
             return True
         return False
+    
+    def is_draw(self):
+        # TODO expand
+
+        if len(self.player_white.pieces) == 1 and len(self.player_black.pieces) == 1:
+            assert next(iter(self.player_white.pieces)).type == PieceType.KING and next(iter(self.player_black.pieces)).type == PieceType.KING
+            return True
+        
+        return False
 
     def get_lookahead_moves(self, player: Player):
         return {move for piece in player.pieces for move in self.get_valid_moves(piece)}
@@ -38,6 +50,7 @@ class Board:
             valid_moves_piece = []
             for move in self.get_valid_moves(piece):
                 board_copy = deepcopy(self)
+                board_copy.main_board = False
                 piece_copy = board_copy.board[piece.position[0]][piece.position[1]]
                 player_copy = board_copy.player_white if player.color == Color.WHITE else board_copy.player_black
                 opp_player_copy = board_copy.player_white if player.color != Color.WHITE else board_copy.player_black
@@ -52,7 +65,7 @@ class Board:
     
     def act(self, player: Player, piece: Piece, move: tuple[int, int]):
         if piece not in player.pieces:
-            raise ValueError(f"Piece {piece.type} at {piece.position} not found in player {player.name}'s pieces")
+            raise ValueError(f"Piece {piece.type} at {square_pos_to_str(piece.position)} not found in player {player.color}'s pieces")
         
         piece_moves = self.get_valid_moves(piece)
         if move not in piece_moves:
@@ -63,6 +76,8 @@ class Board:
         
         if self.board[move[0]][move[1]]:
             piece_eliminated = self.board[move[0]][move[1]]
+            if self.main_board:
+                print(f"{player} captures {piece_eliminated} using {piece}")
             opp_player.pieces.remove(piece_eliminated)
             opp_player.pieces_eliminated.add(piece_eliminated)
 
@@ -229,13 +244,6 @@ class Board:
                 moves_out.append(move)
 
         return moves_out
-    
-    @staticmethod
-    def square_str_to_pos(square_str):
-        letters = 'ABCDEFGH'
-        row = letters.index(square_str[0])
-        col = int(square_str[1]) - 1
-        return row, col
     
     def print_board(self):
         print(f"\n  {'-'*55}")

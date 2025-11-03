@@ -2,8 +2,7 @@ from chess.environment.color import Color
 from chess.environment.piece import Piece, PieceType
 
 class Player:
-    def __init__(self, name: str, color: Color):
-        self.name = name
+    def __init__(self, color: Color):
         self.color = color
         self.pieces = set[Piece]()
         self.pieces_eliminated = set[Piece]()
@@ -39,3 +38,6 @@ class Player:
     
     def __eq__(self, other: 'Player'):
         return self.color == other.color
+    
+    def __str__(self):
+        return self.color.name

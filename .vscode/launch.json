@@ -1,0 +1,14 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python Debugger: Run chess module from workspace root",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "chess",              // runs: python -m chess
+            "cwd": "${workspaceFolder}",    // 👈 ensures it's run from workspace root
+            "console": "integratedTerminal",
+            "redirectOutput": true
+        }
+    ]
+}
