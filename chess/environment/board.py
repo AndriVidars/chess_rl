@@ -1,4 +1,4 @@
-from chess.environment.piece import Piece, PieceType
+from chess.environment.piece import Piece, PieceType, piece_captured_score
 from chess.environment.player import Player
 from chess.environment.color import Color
 from copy import deepcopy
@@ -54,9 +54,19 @@ class Board:
                 piece_copy = board_copy.board[piece.position[0]][piece.position[1]]
                 player_copy = board_copy.player_white if player.color == Color.WHITE else board_copy.player_black
                 opp_player_copy = board_copy.player_white if player.color != Color.WHITE else board_copy.player_black
-                board_copy.act(player_copy, piece_copy, move)
+                
+                piece_captured = board_copy.act(player_copy, piece_copy, move)
+                
+                
                 if not board_copy.has_checked(opp_player_copy):
-                    valid_moves_piece.append(move)
+                    if move in board_copy.get_lookahead_moves(opp_player_copy):
+                        valid_moves_piece.append((move, 1e-5)) # hanging piece
+                    elif board_copy.has_checkmated(player_copy):
+                        valid_moves_piece.append((move, 1e9)) # checkmate
+                    elif board_copy.has_checked(player_copy):
+                        valid_moves_piece.append((move, 200)) # "good" check
+                    else:
+                        valid_moves_piece.append((move,  piece_captured_score[piece_captured] if piece_captured else 1e-2)) # neutral move
             
             if valid_moves_piece:
                 valid_actions[piece] = valid_moves_piece
@@ -71,6 +81,7 @@ class Board:
         if move not in piece_moves:
             raise ValueError(f"Invalid move for piece {piece.type} at {piece.position}: {move}")
         
+        piece_captured_type = None
         opp_player = self.player_black if player == self.player_white else self.player_white
         self.board[piece.position[0]][piece.position[1]] = None
         
@@ -78,6 +89,8 @@ class Board:
             piece_eliminated = self.board[move[0]][move[1]]
             if self.main_board:
                 print(f"{player} captures {piece_eliminated} using {piece}")
+            
+            piece_captured_type = piece_eliminated.type
             opp_player.pieces.remove(piece_eliminated)
             opp_player.pieces_eliminated.add(piece_eliminated)
 
@@ -87,8 +100,9 @@ class Board:
         # promote pawn
         if piece.type == PieceType.PAWN and (move[1] == 0 or move[1] == 7):
             piece.type = PieceType.QUEEN
+        
+        return piece_captured_type
 
-    
     def get_valid_moves(self, piece: Piece):
         match piece.type:
             case PieceType.PAWN:
@@ -106,37 +120,26 @@ class Board:
     
     def get_valid_moves_pawn(self, piece: Piece):
         moves_out = []
-        if piece.color == Color.WHITE:
-            if piece.position[1] == 1:
-                moves_straight = [(piece.position[0], piece.position[1] + 1), (piece.position[0], piece.position[1] + 2)]
-                for move in moves_straight:
-                    if not self.board[move[0]][move[1]]:
-                        moves_out.append(move)
-                
-
-                moves_angled = [(piece.position[0] + 1, piece.position[1] + 1), (piece.position[0] - 1, piece.position[1] + 1)]
-                for move in moves_angled:
-                    x, y = move
-                    if x < 0 or x > 7 or y < 0 or y > 7:
-                        continue
-                    if self.board[x][y] and self.board[x][y].color != piece.color:
-                        moves_out.append(move)
+        dir = 1 if piece.color == Color.WHITE else - 1
         
-        else:
-            if piece.position[1] == 6:
-                moves_straight = [(piece.position[0], piece.position[1] - 1), (piece.position[0], piece.position[1] - 2)]
-                for move in moves_straight:
-                    if not self.board[move[0]][move[1]]:
-                        moves_out.append(move)
-                
-                moves_angled = [(piece.position[0] + 1, piece.position[1] - 1), (piece.position[0] - 1, piece.position[1] - 1)]
-                for move in moves_angled:
-                    x, y = move
-                    if x < 0 or x > 7 or y < 0 or y > 7:
-                        continue
-                    if self.board[x][y] and self.board[x][y].color != piece.color:
-                        moves_out.append(move)
+        # striahgt
+        moves_straight = [(piece.position[0], piece.position[1] + dir)]
+        if (dir == 1 and piece.position[1] == 1) or (dir == -1 and piece.position[1] == 6):
+            moves_straight.append((piece.position[0], piece.position[1] + 2 * dir))
         
+        for move in moves_straight:
+                if not self.board[move[0]][move[1]]:
+                    moves_out.append(move)
+        
+        # angled
+        moves_angled = [(piece.position[0] + 1, piece.position[1] + dir), (piece.position[0] - 1, piece.position[1] + dir)]
+        for move in moves_angled:
+            x, y = move
+            if x < 0 or x > 7 or y < 0 or y > 7:
+                continue
+            if self.board[x][y] and self.board[x][y].color != piece.color:
+                moves_out.append(move)
+                
         return moves_out
     
     def get_valid_moves_rook(self, piece: Piece):
@@ -145,7 +148,7 @@ class Board:
         
         # left
         x_, y_ = x - 1, y
-        while x_ > 0:
+        while x_ >= 0:
             if not self.board[x_][y_]:
                 moves_out.append((x_, y_))
             elif self.board[x_][y_] and self.board[x_][y_].color != piece.color:
@@ -157,7 +160,7 @@ class Board:
 
         # right
         x_, y_ = x + 1, y
-        while x_ < 7:
+        while x_ <= 7:
             if not self.board[x_][y_]:
                 moves_out.append((x_, y_))
             elif self.board[x_][y_] and self.board[x_][y_].color != piece.color:
@@ -169,7 +172,7 @@ class Board:
         
         # up
         x_, y_ = x, y + 1
-        while y_ < 7:
+        while y_ <= 7:
             if not self.board[x_][y_]:
                 moves_out.append((x_, y_))
             elif self.board[x_][y_] and self.board[x_][y_].color != piece.color:
@@ -181,7 +184,7 @@ class Board:
         
         # down
         x_, y_ = x, y - 1
-        while y_ > 0:
+        while y_ >= 0:
             if not self.board[x_][y_]:
                 moves_out.append((x_, y_))
             elif self.board[x_][y_] and self.board[x_][y_].color != piece.color:
@@ -215,7 +218,7 @@ class Board:
         dir_combs = [(-1, -1), (-1, 1), (1, -1), (1, 1)]
         for dir_comb in dir_combs:
             x_, y_ = x + dir_comb[0], y + dir_comb[1]
-            while x_ > 0 and x_ < 7 and y_ > 0 and y_ < 7:
+            while x_ >= 0 and x_ <= 7 and y_ >= 0 and y_ <= 7:
                 if not self.board[x_][y_]:
                     moves_out.append((x_, y_))
                 elif self.board[x_][y_] and self.board[x_][y_].color != piece.color:
@@ -228,7 +231,7 @@ class Board:
         return moves_out
     
     def get_valid_moves_queen(self, piece: Piece):
-        return self.get_valid_moves_rook(piece) + self.get_valid_moves_bishop(piece)
+        return list(set(self.get_valid_moves_rook(piece) + self.get_valid_moves_bishop(piece)))
     
     def get_valid_moves_king(self, piece: Piece):
         moves_out = []

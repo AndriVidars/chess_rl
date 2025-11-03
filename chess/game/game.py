@@ -48,7 +48,7 @@ class Game:
                 self.winner = curr_agent
                 print(f'{self.winner} has checkmated after {self.n_turns} turns')
             
-            if self.board.has_checked(curr_agent.player):
+            elif self.board.has_checked(curr_agent.player):
                 print(f'{curr_agent} has checked')
             
                 

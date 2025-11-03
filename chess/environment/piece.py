@@ -11,6 +11,15 @@ class PieceType(Enum):
     QUEEN = 5
     KING = 6
 
+# help random agent assign score to potential actions, 25 points for check
+piece_captured_score = {
+    PieceType.PAWN: 8,
+    PieceType.ROOK: 30,
+    PieceType.KNIGHT: 50,
+    PieceType.BISHOP: 30,
+    PieceType.QUEEN: 100
+}
+
 class Piece:
     def __init__(self, type: PieceType, color: Color, position: tuple[int, int]):
         self._id = uuid.uuid4()
