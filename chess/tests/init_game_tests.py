@@ -8,10 +8,12 @@ def init_moves_test():
     board = Board(player_white, player_black)
    
     board.print_board()
-    #print(f"\n\nsValid moves for white: {board.get_valid_actions(player_white)}")
+    print(f"\n\nValid moves for white: {board.get_valid_actions(player_white)}")
+    print(f"\n\nValid moves for black: {board.get_valid_actions(player_black)}")
+
 
 def to_pos_tests():
-    squares  = ['A1', 'H8', 'E5']
+    squares  = ['A1', 'H8', 'E5', 'A2', 'C2']
     for s in squares:
         print(f"{s} - {Board.square_str_to_pos(s)}")
 

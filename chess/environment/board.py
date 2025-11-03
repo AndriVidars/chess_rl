@@ -15,8 +15,40 @@ class Board:
             for piece in player.pieces:
                 self.board[piece.position[0]][piece.position[1]] = piece
     
+    def has_checked(self, player: Player):
+        opp_player = self.player_black if player == self.player_white else self.player_white
+        opp_king_pos = next(piece.position for piece in opp_player.pieces if piece.type == PieceType.KING)
+        return opp_king_pos in self.get_lookahead_moves(player) # is king within one move
+    
+    def has_checkmated(self, player: Player):
+        if not self.has_checked(player):
+            return False 
+
+        opp_player = self.player_black if player == self.player_white else self.player_white
+        if not self.get_valid_actions(opp_player):
+            return True
+        return False
+
+    def get_lookahead_moves(self, player: Player):
+        return {move for piece in player.pieces for move in self.get_valid_moves(piece)}
+
     def get_valid_actions(self, player: Player):
-        return {piece: self.get_valid_moves(piece) for piece in player.pieces}
+        valid_actions = {}
+        for piece in player.pieces:
+            valid_moves_piece = []
+            for move in self.get_valid_moves(piece):
+                board_copy = deepcopy(self)
+                piece_copy = board_copy.board[piece.position[0]][piece.position[1]]
+                player_copy = board_copy.player_white if player.color == Color.WHITE else board_copy.player_black
+                opp_player_copy = board_copy.player_white if player.color != Color.WHITE else board_copy.player_black
+                board_copy.act(player_copy, piece_copy, move)
+                if not board_copy.has_checked(opp_player_copy):
+                    valid_moves_piece.append(move)
+            
+            if valid_moves_piece:
+                valid_actions[piece] = valid_moves_piece
+        
+        return valid_actions
     
     def act(self, player: Player, piece: Piece, move: tuple[int, int]):
         if piece not in player.pieces:
@@ -198,27 +230,12 @@ class Board:
 
         return moves_out
     
-    def is_check(self, player: Player):
-        opp_player = self.player_black if player == self.player_white else self.player_white
-        opp_king_pos = next(piece.position for piece in opp_player.pieces if piece.type == PieceType.KING)
-        return any(opp_king_pos in self.get_valid_actions(player).values())
-    
-    def is_checkmate(self, player: Player):
-        opp_player = self.player_black if player == self.player_white else self.player_white
-        opp_player_moves = self.get_valid_actions(opp_player)
-        for piece, move in opp_player_moves.items():
-            board_copy = deepcopy(self)
-            board_copy.act(opp_player, piece, move)
-            if not board_copy.is_check(player):
-                return False
-        return True
-
     @staticmethod
     def square_str_to_pos(square_str):
         letters = 'ABCDEFGH'
-        col = letters.index(square_str[0])
-        row = int(square_str[1]) - 1
-        return col, row
+        row = letters.index(square_str[0])
+        col = int(square_str[1]) - 1
+        return row, col
     
     def print_board(self):
         print(f"\n  {'-'*55}")
