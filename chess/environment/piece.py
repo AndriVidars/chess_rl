@@ -17,7 +17,8 @@ piece_captured_score = {
     PieceType.ROOK: 30,
     PieceType.KNIGHT: 50,
     PieceType.BISHOP: 30,
-    PieceType.QUEEN: 100
+    PieceType.QUEEN: 100,
+    PieceType.KING: 50 # effective score for checking
 }
 
 class Piece:
@@ -26,6 +27,7 @@ class Piece:
         self.type = type
         self.color = color
         self.position = position
+        self.has_moved = False
     
     
     def __repr__(self):

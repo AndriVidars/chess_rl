@@ -51,4 +51,6 @@ class Game:
             elif self.board.has_checked(curr_agent.player):
                 print(f'{curr_agent} has checked')
             
+            print(f"{self.n_turns} turns passed\n")
+            
                 

@@ -19,10 +19,9 @@ class Board:
                 self.board[piece.position[0]][piece.position[1]] = piece
     
     def has_checked(self, player: Player):
-        opp_player = self.player_black if player == self.player_white else self.player_white
-        opp_king_pos = next(piece.position for piece in opp_player.pieces if piece.type == PieceType.KING)
-        return opp_king_pos in self.get_attack_options(player) # is king within one move
-    
+        attack_options_pieces, _ = self.get_attack_options(player)
+        return PieceType.KING in [x.type for x in attack_options_pieces]
+
     def has_checkmated(self, player: Player):
         if not self.has_checked(player):
             return False 
@@ -42,10 +41,23 @@ class Board:
         return False
 
     def get_attack_options(self, player: Player):
-        return {move for piece in player.pieces for move in self.get_valid_moves(piece, attack_only=True)}
+        attack_options_out = []
+        attack_moves = {move for piece in player.pieces for move in self.get_valid_moves(piece, attack_only=True)}
+        for x, y in attack_moves:
+            if self.board[x][y]:
+                assert self.board[x][y].color != player.color
+                attack_options_out.append((self.board[x][y]))
+        
+        attack_options_score = sum(piece_captured_score[x.type] for x in attack_options_out)
+        return attack_options_out, attack_options_score
+
 
     def get_valid_actions(self, player: Player):
         valid_actions = {}
+        opp_player = self.player_white if player.color == Color.BLACK else self.player_white # TODO make function
+        _, opp_player_attack_score = self.get_attack_options(opp_player)
+
+
         for piece in player.pieces:
             valid_moves_piece = []
             for move in self.get_valid_moves(piece):
@@ -54,25 +66,21 @@ class Board:
                 piece_copy = board_copy.board[piece.position[0]][piece.position[1]]
                 player_copy = board_copy.player_white if player.color == Color.WHITE else board_copy.player_black
                 opp_player_copy = board_copy.player_white if player.color != Color.WHITE else board_copy.player_black
+                board_copy.move(player_copy, piece_copy, move)
                 
-                piece_captured = board_copy.act(player_copy, piece_copy, move)
-                
+                _, opp_player_copy_attack_score = board_copy.get_attack_options(opp_player_copy)
                 if not board_copy.has_checked(opp_player_copy):
-                    if move in board_copy.get_attack_options(opp_player_copy):
-                        valid_moves_piece.append((move, 1e-5)) # hanging piece
-                    elif board_copy.has_checkmated(player_copy):
+                    if board_copy.has_checkmated(player_copy):
                         valid_moves_piece.append((move, 1e9)) # checkmate
-                    elif board_copy.has_checked(player_copy):
-                        valid_moves_piece.append((move, 200)) # "good" check
                     else:
-                        valid_moves_piece.append((move,  piece_captured_score[piece_captured] if piece_captured else 1e-2)) # neutral move
+                        valid_moves_piece.append((move, opp_player_attack_score - opp_player_copy_attack_score))
             
             if valid_moves_piece:
                 valid_actions[piece] = valid_moves_piece
         
         return valid_actions
     
-    def act(self, player: Player, piece: Piece, move: tuple[int, int]):
+    def move(self, player: Player, piece: Piece, move: tuple[int, int]):
         if piece not in player.pieces:
             raise ValueError(f"Piece {piece.type} at {square_pos_to_str(piece.position)} not found in player {player.color}'s pieces")
         
@@ -94,6 +102,7 @@ class Board:
             opp_player.pieces_eliminated.add(piece_eliminated)
 
         self.board[move[0]][move[1]] = piece
+        piece.has_moved = True
         piece.position = move
 
         # promote pawn
@@ -101,7 +110,7 @@ class Board:
             piece.type = PieceType.QUEEN
         
         return piece_captured_type
-
+    
     def get_valid_moves(self, piece: Piece, attack_only=False):
         match piece.type:
             case PieceType.PAWN:
@@ -253,6 +262,29 @@ class Board:
                 moves_out.append(move)
 
         return moves_out
+    
+    def can_castle(self, player: Player, king_side=True):
+        opp_player = self.player_black if player.color == Color.WHITE else self.player_white
+        if self.has_checked(opp_player):
+            return False
+        
+        col = 0 if player.color == Color.WHITE else 7
+        rook_row = 7 if king_side else 0
+        king_row = 4
+
+        gap_vacant = (
+            not any([self.board[row][col] for row in range(king_row + 1, 7)])
+            if king_side else
+            not any([self.board[row][col] for row in range(1, king_row)])
+        )
+
+        return (
+            self.board[king_row][col] and not self.board[king_row][col].has_moved and 
+            self.board[rook_row][col] and not self.board[rook_row][col].has_moved and
+            gap_vacant
+        )
+
+
     
     def print_board(self):
         print(f"\n  {'-'*55}")
