@@ -1,9 +1,9 @@
 from chess.environment.piece import Piece, PieceType, piece_captured_score
 from chess.environment.player import Player
 from chess.environment.color import Color
+from chess.environment.utils import square_pos_to_str
 from copy import deepcopy
 
-from chess.environment.utils import square_pos_to_str
 
 class Board:
     def __init__(self, player_white: Player, player_black: Player, main_board=True):
@@ -21,7 +21,7 @@ class Board:
     def has_checked(self, player: Player):
         opp_player = self.player_black if player == self.player_white else self.player_white
         opp_king_pos = next(piece.position for piece in opp_player.pieces if piece.type == PieceType.KING)
-        return opp_king_pos in self.get_lookahead_moves(player) # is king within one move
+        return opp_king_pos in self.get_attack_options(player) # is king within one move
     
     def has_checkmated(self, player: Player):
         if not self.has_checked(player):
@@ -41,8 +41,8 @@ class Board:
         
         return False
 
-    def get_lookahead_moves(self, player: Player):
-        return {move for piece in player.pieces for move in self.get_valid_moves(piece)}
+    def get_attack_options(self, player: Player):
+        return {move for piece in player.pieces for move in self.get_valid_moves(piece, attack_only=True)}
 
     def get_valid_actions(self, player: Player):
         valid_actions = {}
@@ -57,9 +57,8 @@ class Board:
                 
                 piece_captured = board_copy.act(player_copy, piece_copy, move)
                 
-                
                 if not board_copy.has_checked(opp_player_copy):
-                    if move in board_copy.get_lookahead_moves(opp_player_copy):
+                    if move in board_copy.get_attack_options(opp_player_copy):
                         valid_moves_piece.append((move, 1e-5)) # hanging piece
                     elif board_copy.has_checkmated(player_copy):
                         valid_moves_piece.append((move, 1e9)) # checkmate
@@ -103,10 +102,10 @@ class Board:
         
         return piece_captured_type
 
-    def get_valid_moves(self, piece: Piece):
+    def get_valid_moves(self, piece: Piece, attack_only=False):
         match piece.type:
             case PieceType.PAWN:
-                return self.get_valid_moves_pawn(piece)
+                return self.get_valid_attacks_pawn(piece) if attack_only else self.get_valid_moves_pawn(piece)
             case PieceType.ROOK:
                 return self.get_valid_moves_rook(piece)
             case PieceType.KNIGHT:
@@ -117,21 +116,11 @@ class Board:
                 return self.get_valid_moves_queen(piece)
             case PieceType.KING:
                 return self.get_valid_moves_king(piece)
-    
-    def get_valid_moves_pawn(self, piece: Piece):
+
+    def get_valid_attacks_pawn(self, piece: Piece):
+        # where can pawn attack in next turn, used for lookahead moves and check logic
         moves_out = []
-        dir = 1 if piece.color == Color.WHITE else - 1
-        
-        # striahgt
-        moves_straight = [(piece.position[0], piece.position[1] + dir)]
-        if (dir == 1 and piece.position[1] == 1) or (dir == -1 and piece.position[1] == 6):
-            moves_straight.append((piece.position[0], piece.position[1] + 2 * dir))
-        
-        for move in moves_straight:
-                if not self.board[move[0]][move[1]]:
-                    moves_out.append(move)
-        
-        # angled
+        dir = 1 if piece.color == Color.WHITE else -1
         moves_angled = [(piece.position[0] + 1, piece.position[1] + dir), (piece.position[0] - 1, piece.position[1] + dir)]
         for move in moves_angled:
             x, y = move
@@ -141,6 +130,23 @@ class Board:
                 moves_out.append(move)
                 
         return moves_out
+
+    def get_valid_moves_pawn(self, piece: Piece):
+        moves_out = []
+        dir = 1 if piece.color == Color.WHITE else - 1
+        # straight
+        moves_straight = []
+        if not self.board[piece.position[0]][piece.position[1] + dir]:
+            moves_straight.append((piece.position[0], piece.position[1] + dir))
+
+        if (dir == 1 and piece.position[1] == 1) or (dir == -1 and piece.position[1] == 6):
+            if not self.board[piece.position[0]][piece.position[1] + dir] and not self.board[piece.position[0]][piece.position[1] + 2 * dir]:
+                moves_straight.append((piece.position[0], piece.position[1] + 2 * dir))
+        
+        if moves_straight:
+            moves_out += moves_straight
+
+        return moves_out + self.get_valid_attacks_pawn(piece)
     
     def get_valid_moves_rook(self, piece: Piece):
         moves_out = []
@@ -259,4 +265,4 @@ class Board:
                     print(f"{f'{i + 1} ' if j == 0 else ''}| .. |", end=" ")
             print(f"\n  {'-'*55}")
         
-        print(f"    {'      '.join(list('ABCDEFGH'))}")
+        print(f"    {'      '.join(list('ABCDEFGH'))}")             
