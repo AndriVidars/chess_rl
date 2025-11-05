@@ -34,8 +34,12 @@ class Board:
             return False 
 
         opp_player = self.get_opp_player(player)
-        if not self.get_valid_actions(opp_player):
+        valid_actions = self.get_valid_actions(opp_player)
+
+        # if actions is empty for moves and castle
+        if not any(actions for _, actions in valid_actions.items()):
             return True
+
         return False
     
     def is_draw(self):
