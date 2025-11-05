@@ -3,7 +3,11 @@ from chess.environment.player import Player
 from chess.environment.color import Color
 from chess.environment.utils import square_pos_to_str
 from copy import deepcopy
+from enum import Enum
 
+class ActionType(Enum):
+    MOVE = 1,
+    CASTLE = 2
 
 class Board:
     def __init__(self, player_white: Player, player_black: Player, main_board=True):
@@ -18,6 +22,9 @@ class Board:
             for piece in player.pieces:
                 self.board[piece.position[0]][piece.position[1]] = piece
     
+    def get_opp_player(self, player: Player):
+        return self.player_black if player.color == Color.WHITE else self.player_white
+    
     def has_checked(self, player: Player):
         attack_options_pieces, _ = self.get_attack_options(player)
         return PieceType.KING in [x.type for x in attack_options_pieces]
@@ -26,7 +33,7 @@ class Board:
         if not self.has_checked(player):
             return False 
 
-        opp_player = self.player_black if player == self.player_white else self.player_white
+        opp_player = self.get_opp_player(player)
         if not self.get_valid_actions(opp_player):
             return True
         return False
@@ -53,11 +60,12 @@ class Board:
 
 
     def get_valid_actions(self, player: Player):
-        valid_actions = {}
-        opp_player = self.player_white if player.color == Color.BLACK else self.player_white # TODO make function
+        # TODO split into two functionss
+        valid_actions = {ActionType.MOVE: {}, ActionType.CASTLE: {}}
+        
+        opp_player = self.get_opp_player(player)
         _, opp_player_attack_score = self.get_attack_options(opp_player)
-
-
+        
         for piece in player.pieces:
             valid_moves_piece = []
             for move in self.get_valid_moves(piece):
@@ -65,18 +73,31 @@ class Board:
                 board_copy.main_board = False
                 piece_copy = board_copy.board[piece.position[0]][piece.position[1]]
                 player_copy = board_copy.player_white if player.color == Color.WHITE else board_copy.player_black
-                opp_player_copy = board_copy.player_white if player.color != Color.WHITE else board_copy.player_black
-                board_copy.move(player_copy, piece_copy, move)
+                opp_player_copy = board_copy.get_opp_player(player_copy)
+                piece_captured_type = board_copy.move(player_copy, piece_copy, move)
+                move_score_base = piece_captured_score[piece_captured_type] if piece_captured_type else 0
                 
                 _, opp_player_copy_attack_score = board_copy.get_attack_options(opp_player_copy)
                 if not board_copy.has_checked(opp_player_copy):
-                    if board_copy.has_checkmated(player_copy):
-                        valid_moves_piece.append((move, 1e9)) # checkmate
-                    else:
-                        valid_moves_piece.append((move, opp_player_attack_score - opp_player_copy_attack_score))
-            
+                    move_score = 1e9 if board_copy.has_checkmated(player_copy) else move_score_base + opp_player_attack_score - opp_player_copy_attack_score
+                    valid_moves_piece.append((move, move_score))
+
             if valid_moves_piece:
-                valid_actions[piece] = valid_moves_piece
+                valid_actions[ActionType.MOVE][piece] = valid_moves_piece
+        
+        for king_side in [True, False]:
+            if self.can_castle(player, king_side):
+                board_copy = deepcopy(self)
+                board_copy.main_board = False
+                player_copy = board_copy.player_white if player.color == Color.WHITE else board_copy.player_black
+                opp_player_copy = board_copy.get_opp_player(player_copy)
+
+                board_copy.castle(player_copy, king_side)
+                _, opp_player_copy_attack_score = board_copy.get_attack_options(opp_player_copy)
+
+                # note that check for castle into check is done in can_castle
+                castle_score = 1e9 if board_copy.has_checkmated(player_copy) else opp_player_attack_score - opp_player_copy_attack_score
+                valid_actions[ActionType.CASTLE][king_side] = castle_score
         
         return valid_actions
     
@@ -89,7 +110,7 @@ class Board:
             raise ValueError(f"Invalid move for piece {piece.type} at {piece.position}: {move}")
         
         piece_captured_type = None
-        opp_player = self.player_black if player == self.player_white else self.player_white
+        opp_player = self.get_opp_player(player)
         self.board[piece.position[0]][piece.position[1]] = None
         
         if self.board[move[0]][move[1]]:
@@ -98,6 +119,7 @@ class Board:
                 print(f"{player} captures {piece_eliminated} using {piece}")
             
             piece_captured_type = piece_eliminated.type
+            piece_eliminated.position = None
             opp_player.pieces.remove(piece_eliminated)
             opp_player.pieces_eliminated.add(piece_eliminated)
 
@@ -107,6 +129,8 @@ class Board:
 
         # promote pawn
         if piece.type == PieceType.PAWN and (move[1] == 0 or move[1] == 7):
+            if self.main_board:
+                print(f'Promoting Pawn at {square_pos_to_str(piece.position)} to Queen')
             piece.type = PieceType.QUEEN
         
         return piece_captured_type
@@ -263,8 +287,28 @@ class Board:
 
         return moves_out
     
+    def castle(self, player: Player, king_side=True):
+        if self.main_board:
+            print(f"{player} castling {'king side' if king_side else 'queen side'}\n")
+        
+        col = 0 if player.color == Color.WHITE else 7
+        rook_row = 7 if king_side else 0
+        king_row = 4
+
+        king = self.board[king_row][col]
+        rook = self.board[rook_row][col]
+
+        self.board[king_row][col] = None
+        self.board[rook_row][col] = None
+
+        king_move = (6, col) if king_side else (2, col)
+        rook_move = (5, col) if king_side else (3, col)
+        self.board[king_move[0]][king_move[1]] = king
+        self.board[rook_move[0]][rook_move[1]] = rook
+        
+    
     def can_castle(self, player: Player, king_side=True):
-        opp_player = self.player_black if player.color == Color.WHITE else self.player_white
+        opp_player = self.get_opp_player(player)
         if self.has_checked(opp_player):
             return False
         
@@ -278,13 +322,17 @@ class Board:
             not any([self.board[row][col] for row in range(1, king_row)])
         )
 
-        return (
+        if (
             self.board[king_row][col] and not self.board[king_row][col].has_moved and 
             self.board[rook_row][col] and not self.board[rook_row][col].has_moved and
             gap_vacant
-        )
-
-
+        ):
+            board_copy = deepcopy(self)
+            board_copy.main_board = False
+            player_copy = board_copy.player_white if player.color == Color.WHITE else board_copy.player_black
+            opp_player_copy = board_copy.get_opp_player(player_copy)
+            board_copy.castle(player_copy, king_side)
+            return not board_copy.has_checked(opp_player_copy)
     
     def print_board(self):
         print(f"\n  {'-'*55}")
