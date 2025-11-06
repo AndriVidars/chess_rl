@@ -9,6 +9,12 @@ class ActionType(Enum):
     MOVE = 1,
     CASTLE = 2
 
+slide_move_directions = {
+        PieceType.ROOK: ((-1, 0), (1, 0), (0, -1), (0, 1)),
+        PieceType.BISHOP: ((-1, -1), (-1, 1), (1, -1), (1, 1)),
+        PieceType.QUEEN: ((-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (-1, 1), (1, -1), (1, 1))
+}
+
 class Board:
     def __init__(self, player_white: Player, player_black: Player, main_board=True):
         self.board = [[None for _ in range(8)] for _ in range(8)]
@@ -25,6 +31,14 @@ class Board:
     def get_opp_player(self, player: Player):
         return self.player_black if player.color == Color.WHITE else self.player_white
     
+    def is_draw(self):
+        # TODO expand with other auto-draw scenarios
+        if len(self.player_white.pieces) == 1 and len(self.player_black.pieces) == 1:
+            assert next(iter(self.player_white.pieces)).type == PieceType.KING and next(iter(self.player_black.pieces)).type == PieceType.KING
+            return True
+        
+        return False
+    
     def has_checked(self, player: Player):
         attack_options_pieces, _ = self.get_attack_options(player)
         return PieceType.KING in [x.type for x in attack_options_pieces]
@@ -36,21 +50,12 @@ class Board:
         opp_player = self.get_opp_player(player)
         valid_actions = self.get_valid_actions(opp_player)
 
-        # if actions is empty for moves and castle
+        # if actions dict is empty for move and castling options
         if not any(actions for _, actions in valid_actions.items()):
             return True
 
         return False
     
-    def is_draw(self):
-        # TODO expand
-
-        if len(self.player_white.pieces) == 1 and len(self.player_black.pieces) == 1:
-            assert next(iter(self.player_white.pieces)).type == PieceType.KING and next(iter(self.player_black.pieces)).type == PieceType.KING
-            return True
-        
-        return False
-
     def get_attack_options(self, player: Player):
         attack_options_out = []
         attack_moves = {move for piece in player.pieces for move in self.get_valid_moves(piece, attack_only=True)}
@@ -64,7 +69,7 @@ class Board:
 
 
     def get_valid_actions(self, player: Player):
-        # TODO split into two functionss
+        # TODO split into two functions
         valid_actions = {ActionType.MOVE: {}, ActionType.CASTLE: {}}
         
         opp_player = self.get_opp_player(player)
@@ -83,7 +88,7 @@ class Board:
                 
                 _, opp_player_copy_attack_score = board_copy.get_attack_options(opp_player_copy)
                 if not board_copy.has_checked(opp_player_copy):
-                    move_score = 1e9 if board_copy.has_checkmated(player_copy) else move_score_base + opp_player_attack_score - opp_player_copy_attack_score
+                    move_score = 1e9 if board_copy.has_checkmated(player_copy) else move_score_base + (opp_player_attack_score - opp_player_copy_attack_score)
                     valid_moves_piece.append((move, move_score))
 
             if valid_moves_piece:
@@ -100,7 +105,7 @@ class Board:
                 _, opp_player_copy_attack_score = board_copy.get_attack_options(opp_player_copy)
 
                 # note that check for castle into check is done in can_castle
-                castle_score = 1e9 if board_copy.has_checkmated(player_copy) else opp_player_attack_score - opp_player_copy_attack_score
+                castle_score = 1e9 if board_copy.has_checkmated(player_copy) else (opp_player_attack_score - opp_player_copy_attack_score)
                 valid_actions[ActionType.CASTLE][king_side] = castle_score
         
         return valid_actions
@@ -144,18 +149,18 @@ class Board:
             case PieceType.PAWN:
                 return self.get_valid_attacks_pawn(piece) if attack_only else self.get_valid_moves_pawn(piece)
             case PieceType.ROOK:
-                return self.get_valid_moves_rook(piece)
+                return self.get_valid_moves_slide(piece)
             case PieceType.KNIGHT:
                 return self.get_valid_moves_knight(piece)
             case PieceType.BISHOP:
-                return self.get_valid_moves_bishop(piece)
+                return self.get_valid_moves_slide(piece)
             case PieceType.QUEEN:
-                return self.get_valid_moves_queen(piece)
+                return self.get_valid_moves_slide(piece)
             case PieceType.KING:
                 return self.get_valid_moves_king(piece)
 
     def get_valid_attacks_pawn(self, piece: Piece):
-        # where can pawn attack in next turn, used for lookahead moves and check logic
+        # get attacking (capture) moves for pawn based on current game state
         moves_out = []
         dir = 1 if piece.color == Color.WHITE else -1
         moves_angled = [(piece.position[0] + 1, piece.position[1] + dir), (piece.position[0] - 1, piece.position[1] + dir)]
@@ -171,6 +176,7 @@ class Board:
     def get_valid_moves_pawn(self, piece: Piece):
         moves_out = []
         dir = 1 if piece.color == Color.WHITE else - 1
+
         # straight
         moves_straight = []
         if not self.board[piece.position[0]][piece.position[1] + dir]:
@@ -185,60 +191,27 @@ class Board:
 
         return moves_out + self.get_valid_attacks_pawn(piece)
     
-    def get_valid_moves_rook(self, piece: Piece):
+
+    def get_valid_moves_slide(self, piece: Piece):
+        move_directions = slide_move_directions[piece.type]
         moves_out = []
         x, y = piece.position
         
-        # left
-        x_, y_ = x - 1, y
-        while x_ >= 0:
-            if not self.board[x_][y_]:
-                moves_out.append((x_, y_))
-            elif self.board[x_][y_] and self.board[x_][y_].color != piece.color:
-                moves_out.append((x_, y_))
-                break
-            else:
-                break
-            x_ -= 1
-
-        # right
-        x_, y_ = x + 1, y
-        while x_ <= 7:
-            if not self.board[x_][y_]:
-                moves_out.append((x_, y_))
-            elif self.board[x_][y_] and self.board[x_][y_].color != piece.color:
-                moves_out.append((x_, y_))
-                break
-            else:
-                break
-            x_ += 1
-        
-        # up
-        x_, y_ = x, y + 1
-        while y_ <= 7:
-            if not self.board[x_][y_]:
-                moves_out.append((x_, y_))
-            elif self.board[x_][y_] and self.board[x_][y_].color != piece.color:
-                moves_out.append((x_, y_))
-                break
-            else:
-                break
-            y_ += 1
-        
-        # down
-        x_, y_ = x, y - 1
-        while y_ >= 0:
-            if not self.board[x_][y_]:
-                moves_out.append((x_, y_))
-            elif self.board[x_][y_] and self.board[x_][y_].color != piece.color:
-                moves_out.append((x_, y_))
-                break
-            else:
-                break
-            y_ -= 1
+        for x_change, y_change in move_directions:
+            x_, y_ = x + x_change, y + y_change
+            while x_ >= 0 and x_ <= 7 and y_ >= 0 and y_ <= 7:
+                if not self.board[x_][y_]:
+                    moves_out.append((x_, y_))
+                elif self.board[x_][y_] and self.board[x_][y_].color != piece.color:
+                    moves_out.append((x_, y_))
+                    break
+                else:
+                    break
+                x_ += x_change
+                y_ += y_change
         
         return moves_out
-    
+ 
     def get_valid_moves_knight(self, piece: Piece):
         moves_out = []
         x, y = piece.position
@@ -253,29 +226,7 @@ class Board:
             elif self.board[x_][y_] and self.board[x_][y_].color != piece.color:
                     moves_out.append(move)
         return moves_out
-    
-    def get_valid_moves_bishop(self, piece: Piece):
-        moves_out = []
-        x, y = piece.position
         
-        dir_combs = [(-1, -1), (-1, 1), (1, -1), (1, 1)]
-        for dir_comb in dir_combs:
-            x_, y_ = x + dir_comb[0], y + dir_comb[1]
-            while x_ >= 0 and x_ <= 7 and y_ >= 0 and y_ <= 7:
-                if not self.board[x_][y_]:
-                    moves_out.append((x_, y_))
-                elif self.board[x_][y_] and self.board[x_][y_].color != piece.color:
-                    moves_out.append((x_, y_))
-                    break
-                else:
-                    break
-                x_ += dir_comb[0]
-                y_ += dir_comb[1]
-        return moves_out
-    
-    def get_valid_moves_queen(self, piece: Piece):
-        return list(set(self.get_valid_moves_rook(piece) + self.get_valid_moves_bishop(piece)))
-    
     def get_valid_moves_king(self, piece: Piece):
         moves_out = []
         x, y = piece.position
@@ -338,7 +289,7 @@ class Board:
             player_copy = board_copy.player_white if player.color == Color.WHITE else board_copy.player_black
             opp_player_copy = board_copy.get_opp_player(player_copy)
             board_copy.castle(player_copy, king_side)
-            return not board_copy.has_checked(opp_player_copy)
+            return not board_copy.has_checked(opp_player_copy) # ensure that you cant castle into check (by opponent)
     
     def print_board(self):
         print(f"\n  {'-'*55}")
