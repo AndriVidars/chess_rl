@@ -309,6 +309,8 @@ class Board:
         rook_move = (5, col) if king_side else (3, col)
         self.board[king_move[0]][king_move[1]] = king
         self.board[rook_move[0]][rook_move[1]] = rook
+        king.position = king_move
+        rook.position = rook_move
         
     
     def can_castle(self, player: Player, king_side=True):
