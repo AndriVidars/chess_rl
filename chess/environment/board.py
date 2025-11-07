@@ -6,7 +6,7 @@ from copy import deepcopy
 from enum import Enum
 
 class ActionType(Enum):
-    MOVE = 1,
+    MOVE = 1
     CASTLE = 2
 
 slide_move_directions = {
@@ -280,9 +280,9 @@ class Board:
         king_row = 4
 
         gap_vacant = (
-            not any([self.board[row][col] for row in range(king_row + 1, 7)])
+            not any([self.board[row][col] for row in range(king_row + 1, rook_row)])
             if king_side else
-            not any([self.board[row][col] for row in range(1, king_row)])
+            not any([self.board[row][col] for row in range(rook_row + 1, king_row)])
         )
 
         if (
