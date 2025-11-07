@@ -29,12 +29,12 @@ class Game:
             curr_agent = self.agents[self.n_turns % 2]
             if self.display_board:
                 print(f"\nCurrent Player: {curr_agent}")
-            
-            if not self.board.get_valid_actions(curr_agent.player):
+
+            if self.board.is_stalemate(curr_agent.player):
                 print(f"Game ended in stalemate after {self.n_turns} turns")
                 self.stalemate = True
                 break
-
+            
             curr_agent.act()
             self.board.print_board()
 

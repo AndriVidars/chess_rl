@@ -51,10 +51,16 @@ class Board:
         valid_actions = self.get_valid_actions(opp_player)
 
         # if actions dict is empty for move and castling options
-        if not any(actions for _, actions in valid_actions.items()):
-            return True
+        return not any(actions for _, actions in valid_actions.items())
 
-        return False
+    
+    def is_stalemate(self, player: Player):
+        opp_player = self.get_opp_player(player)
+        if self.has_checked(opp_player):
+            return False # curr turn player in check, opp player has checked
+        
+        valid_actions = self.get_valid_actions(player)
+        return not any(actions for _, actions in valid_actions.items())
     
     def get_attack_options(self, player: Player):
         attack_options_out = []
